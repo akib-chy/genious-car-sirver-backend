@@ -1,13 +1,27 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
+function verifyJWT(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "unauthorize access" });
+  }
+  const token = authHeader.split(" ")[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_PASS, (err, decoded) => {
+    if (err) {
+      return res.status(403).send({ message: "Firbided Access" });
+    }
+    req.decoded = decoded;
+  });
+  next();
+}
 app.get("/", (req, res) => {
   res.send("Running Server");
 });
@@ -55,6 +69,26 @@ async function run() {
       const order = req.body;
       const result = await orderCollection.insertOne(order);
       res.send(result);
+    });
+    app.get("/orders", verifyJWT, async (req, res) => {
+      const decodedEmail = req?.decoded?.email;
+      const email = req.query.email;
+
+      if (email === decodedEmail) {
+        const query = { email };
+        const cursor = orderCollection.find(query);
+        const result = await cursor.toArray();
+        res.send(result);
+      } else {
+        res.status(403).send({ message: "forbiden Accedd" });
+      }
+    });
+    app.post("/login", async (req, res) => {
+      const user = req.body;
+      const accessToken = jwt.sign(user, process.env.ACCESS_TOKEN_PASS, {
+        expiresIn: "1d",
+      });
+      res.send({ accessToken });
     });
   } finally {
   }
